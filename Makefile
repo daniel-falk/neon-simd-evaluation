@@ -1,7 +1,7 @@
 CC = gcc
-CFLAGS = -mfpu=neon
+CFLAGS = -mfpu=neon -Wall -Werror
 
-FILES = main.c
+FILES = main.c fir_c.c fir_neon.c
 
 BINARY = main
 

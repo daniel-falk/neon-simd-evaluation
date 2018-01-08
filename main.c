@@ -5,68 +5,12 @@
 #include <assert.h>
 #include <string.h>
 
-#include <arm_neon.h>
-
 #define DATA_SIZE    1e6
 
 typedef void (*fncn_t)(const unsigned char *, size_t, const unsigned char *, size_t, unsigned char **, size_t *);
 
-
-/*
- * Make a finite impule response filter pass over data
- *
- * weights are assumed to sum up to 256
- *
- * Modifies result and rlen
- *
- */
-void fir_c(const unsigned char *data, size_t dlen, const unsigned char *weights, size_t wlen, unsigned char **result, size_t *rlen) {
-
-	*rlen   = (dlen - wlen);
-	*result = malloc(*rlen);
-
-	unsigned int tmp;
-	size_t       i, j;
-
-	for (i = 0; i < *rlen; i ++) {
-		tmp = 0;
-		for (j = 0; j < wlen; j++) {
-			tmp += data[i + j] * weights[j];
-		}
-		(*result)[i] = (char)(tmp >> 8); // Divide by the sum of weights
-	}
-}
-
-
-void fir_neon(const unsigned char *data, size_t dlen, const unsigned char *weights, size_t wlen, unsigned char **result, size_t *rlen) {
-
-	assert(wlen % 8 == 0);
-
-	*rlen = (dlen - wlen);
-	*result = malloc(*rlen);
-
-	uint8x8_t  d, w; // Registers in SIMD module to load data and weights
-	uint16x8_t tmp;  // Register in SIMD module to store intermediate 16-bit results
-
-	size_t i, j;
-	for (i = 0; i < *rlen; i ++) {
-		tmp = vdupq_n_u16(0);
-		for (j = 0; j < wlen; j += 8) {
-			d   = vld1_u8(&data[i + j]);
-			w   = vld1_u8(&weights[j]);
-			tmp = vmlal_u8(tmp, d, w);
-		}
-		(*result)[i] = (unsigned char)((vgetq_lane_u16(tmp, 0) +
-			        vgetq_lane_u16(tmp, 1) +
-			        vgetq_lane_u16(tmp, 2) +
-			        vgetq_lane_u16(tmp, 3) +
-			        vgetq_lane_u16(tmp, 4) +
-			        vgetq_lane_u16(tmp, 5) +
-			        vgetq_lane_u16(tmp, 6) +
-			        vgetq_lane_u16(tmp, 7)) >> 8);
-	}
-}
-
+extern void fir_c(const unsigned char *data, size_t dlen, const unsigned char *weights, size_t wlen, unsigned char **result, size_t *rlen);
+extern void fir_neon(const unsigned char *data, size_t dlen, const unsigned char *weights, size_t wlen, unsigned char **result, size_t *rlen);
 
 /*
  * Write the low-pass data and the input data to file
