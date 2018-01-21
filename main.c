@@ -7,10 +7,11 @@
 
 #define DATA_SIZE    1e6
 
-typedef void (*fncn_t)(const unsigned char *, size_t, const unsigned char *, size_t, unsigned char **, size_t *);
+typedef void (fncn_t)(const unsigned char *, size_t, const unsigned char *, size_t, unsigned char **, size_t *);
 
-extern void fir_c(const unsigned char *data, size_t dlen, const unsigned char *weights, size_t wlen, unsigned char **result, size_t *rlen);
-extern void fir_neon(const unsigned char *data, size_t dlen, const unsigned char *weights, size_t wlen, unsigned char **result, size_t *rlen);
+extern fncn_t fir_c;
+extern fncn_t fir_neon;
+extern fncn_t fir_asm;
 
 /*
  * Write the low-pass data and the input data to file
@@ -50,14 +51,14 @@ int main(int argc, char *argv[]) {
 		exit(1);
 	}
 	int  flen = strlen(argv[1]);
-	char *name[] = {"plain_c", "neon"};
+	char *name[] = {"plain_c", "neon", "asm"};
 	char *fname[2];
 	fname[0] = malloc(flen + strlen(name[0]) + 2);
 	fname[1] = malloc(flen + strlen(name[1]) + 2);
 	sprintf(fname[0], "%s.%s", argv[1], name[0]);
 	sprintf(fname[1], "%s.%s", argv[1], name[1]);
 
-	static fncn_t fncn[] = {fir_c, fir_neon};
+	static fncn_t *fncn[] = {fir_c, fir_neon, fir_asm};
 
 	// Saw tooth data
 	unsigned char *data = malloc(DATA_SIZE);
@@ -70,7 +71,7 @@ int main(int argc, char *argv[]) {
 	const unsigned char weights[] = {32, 32, 32, 32, 32, 32, 32, 32}; // Sum is 256
 
 	// Do FIR!
-	for (i = 0; i < 2; i++) {
+	for (i = 0; i < 3; i++) {
 		printf("Using method: %s\n", name[i]);
 
 		struct timespec t_prc_start,
@@ -81,8 +82,8 @@ int main(int argc, char *argv[]) {
 		clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &t_prc_start);
 		clock_gettime(CLOCK_MONOTONIC, &t_mon_start);
 		
-		size_t rlen;
-		unsigned char   *result;
+		size_t        rlen;
+		unsigned char *result = NULL;
 
 		(fncn[i])(data, DATA_SIZE, weights, sizeof(weights) / sizeof(weights[0]), &result, &rlen);
 
@@ -93,7 +94,9 @@ int main(int argc, char *argv[]) {
 		printf("Process time per sample:   %ld\n", time_per_sample(t_prc_start, t_prc_stop, DATA_SIZE));
 
 		// Print results to file
-		write_file(data, DATA_SIZE, result, rlen, fname[i]);
+		if (result && data) {
+			write_file(data, DATA_SIZE, result, rlen, fname[i]);
+		}
 
 		free(result);
 	}
